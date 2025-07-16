@@ -1,0 +1,106 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Upload Menu Item</title>
+  <style>
+    body {
+      font-family: 'Arial', sans-serif;
+      background: #e9f7f7;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      height: 100vh;
+    }
+    .form-box {
+      background: white;
+      padding: 20px;
+      border-radius: 12px;
+      width: 350px;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+    }
+    h2 {
+      text-align: center;
+      color: #01dbc2;
+    }
+    input, select, button {
+      width: 100%;
+      padding: 12px;
+      margin-bottom: 14px;
+      border-radius: 8px;
+      border: 1px solid #ccc;
+      font-size: 1rem;
+    }
+    input[type="file"] {
+      border: none;
+    }
+    button {
+      background: #01dbc2;
+      color: white;
+      border: none;
+      font-weight: bold;
+      cursor: pointer;
+    }
+    button:hover {
+      background: #01bb9e;
+    }
+    #message {
+      text-align: center;
+      font-weight: bold;
+      margin-top: 10px;
+    }
+    .success { color: green; }
+    .error { color: red; }
+  </style>
+</head>
+<body>
+  <div class="form-box">
+    <h2>Add Menu Item</h2>
+    <form id="menuForm" enctype="multipart/form-data">
+      <input type="text" id="name" name="name" placeholder="Item Name" required />
+      <input type="number" id="price" name="price" placeholder="Price (₹)" required />
+      <select id="category" name="category" >
+        <option value="">Select Category</option>
+        <option value="full">Full</option>
+        <option value="half">Half</option>
+      </select>
+      <input type="file" id="image" name="image" accept="image/*" />
+      <button type="submit">Upload Item</button>
+      <p id="message"></p>
+    </form>
+  </div>
+
+  <script>
+    const API_BASE = "http://localhost:5000"; // change if hosted
+    const form = document.getElementById("menuForm");
+    const message = document.getElementById("message");
+
+    form.addEventListener("submit", async (e) => {
+      e.preventDefault();
+      const formData = new FormData(form);
+
+      try {
+        const res = await fetch(`${API_BASE}/menu`, {
+          method: "POST",
+          body: formData
+        });
+
+        const result = await res.json();
+        if (res.ok) {
+          message.textContent = "✅ Menu item added successfully!";
+          message.className = "success";
+          form.reset();
+        } else {
+          message.textContent = result.error || "❌ Failed to add item.";
+          message.className = "error";
+        }
+      } catch (err) {
+        console.error("Error:", err);
+        message.textContent = "❌ Error uploading item.";
+        message.className = "error";
+      }
+    });
+  </script>
+</body>
+</html>

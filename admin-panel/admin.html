@@ -1,0 +1,248 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Admin Dashboard</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <div class="container">
+    <h1>🧾 Live Orders</h1>
+<h2>⭐ Customer Ratings & Feedback</h2>
+<div id="ratings-container">Loading ratings...</div>
+    <div class="controls">
+      <label>
+        Sort by:
+        <select id="sortOption">
+          <option value="time">Time (latest first)</option>
+          <option value="table">Table Number</option>
+        </select>
+      </label>
+      <button onclick="fetchOrdersAndNotify()">🔄 Refresh Orders</button>
+    </div>
+
+    <div class="dashboard-summary">
+      <div class="summary-card">
+        <div class="summary-title">Total Orders</div>
+        <div class="summary-value" id="total-orders">0</div>
+      </div>
+      <div class="summary-card">
+        <div class="summary-title">Revenue</div>
+        <div class="summary-value" id="revenue">₹0</div>
+      </div>
+    </div>
+
+    <div id="orders"></div>
+
+    <h2>🍽️ Menu Items</h2>
+    <div id="menu-items">Loading menu...</div>
+  </div>
+
+  <audio id="notif-sound" src="ding.mp3" preload="auto"></audio>
+
+  <script>
+    const API_BASE = "http://10.147.185.125:5000";
+    let lastOrderIds = [];
+    let menuPrices = {};
+
+    async function fetchMenuPrices() {
+      try {
+        const res = await fetch(`${API_BASE}/menu`);
+        const menu = await res.json();
+        menuPrices = {};
+        menu.forEach(item => {
+          menuPrices[item.name] = item.price;
+        });
+      } catch (err) {
+        console.error("Failed to fetch menu prices", err);
+      }
+    }
+
+    async function fetchOrdersAndNotify() {
+      try {
+        const res = await fetch(`${API_BASE}/orders`);
+        let orders = await res.json();
+
+        const currentIds = orders.map(o => o._id);
+        const newOrders = currentIds.filter(id => !lastOrderIds.includes(id));
+
+        if (newOrders.length > 0) {
+          document.getElementById("notif-sound").play();
+        }
+        lastOrderIds = currentIds;
+
+        renderOrders(orders);
+        updateRevenueAndTotal(orders);
+      } catch (err) {
+        console.error("Failed to load orders", err);
+      }
+    }
+
+    function updateRevenueAndTotal(orders) {
+      let revenue = 0;
+
+      orders.forEach(order => {
+        if (order.items && Array.isArray(order.items)) {
+          order.items.forEach(item => {
+            if (typeof item === "object" && item.name && item.quantity) {
+              revenue += (menuPrices[item.name] || 0) * item.quantity;
+            }
+          });
+        }
+      });
+
+      document.getElementById("total-orders").innerText = orders.length;
+      document.getElementById("revenue").innerText = "₹" + revenue;
+    }
+
+    function renderOrders(data) {
+      const container = document.getElementById("orders");
+      container.innerHTML = "";
+
+      if (data.length === 0) {
+        container.innerHTML = "<p>No current orders.</p>";
+        return;
+      }
+
+      data.forEach(order => {
+        const div = document.createElement("div");
+        div.className = "menu-item";
+        div.id = `order-${order._id}`;
+        div.innerHTML = `
+          <strong>Table ${order.table}</strong><br/>
+          Items: ${order.items.map(i => typeof i === 'object' ? `${i.name} (${i.quantity})` : i).join(", ")}<br/>
+           ${order.note ? `<strong>Note:</strong> ${order.note}<br/>` : ''}
+          Total: ₹${order.total || 0}<br/>
+          Time: ${new Date(order.time).toLocaleString()}<br/>
+          <button class="complete-btn" onclick="deleteOrder('${order._id}')">Mark as Complete</button>
+        `;
+        container.appendChild(div);
+      });
+    }
+
+    async function deleteOrder(id) {
+      try {
+        const orderElement = document.getElementById(`order-${id}`);
+        if (orderElement) {
+          orderElement.classList.add("removing");
+          setTimeout(() => orderElement.remove(), 400);
+        }
+
+        await fetch(`${API_BASE}/orders/${id}`, { method: "DELETE" });
+        fetchOrdersAndNotify();
+
+      } catch (err) {
+        alert("Failed to delete order.");
+        console.error("Order deletion error:", err);
+      }
+    }
+
+    async function fetchMenu() {
+      try {
+        const res = await fetch(`${API_BASE}/menu`);
+        const menu = await res.json();
+        renderMenu(menu);
+      } catch (err) {
+        console.error("Failed to fetch menu", err);
+      }
+    }
+
+    function renderMenu(menu) {
+      const container = document.getElementById("menu-items");
+      container.innerHTML = "";
+
+      if (menu.length === 0) {
+        container.innerHTML = "<p>No menu items available.</p>";
+        return;
+      }
+
+      menu.forEach(item => {
+        const div = document.createElement("div");
+        div.className = "menu-item";
+        div.innerHTML = `
+          <strong>${item.name}</strong><br/>
+          Price: ₹${item.price}<br/>
+          Category: ${item.category}<br/>
+          ${item.image ? `<img src="${API_BASE}/uploads/${item.image}" width="80"/><br/>` : ''}
+          <button class="delete-btn" onclick="deleteMenuItem('${item._id}')">Delete Item</button>
+          <hr/>
+        `;
+        container.appendChild(div);
+      });
+    }
+
+    async function deleteMenuItem(itemId) {
+      if (confirm("Are you sure you want to delete this menu item?")) {
+        try {
+          const res = await fetch(`${API_BASE}/menu/${itemId}`, {
+            method: "DELETE"
+          });
+          const data = await res.json();
+          alert(data.message);
+
+          fetchMenu();
+
+        } catch (err) {
+          console.error("Failed to delete menu item", err);
+          alert("Failed to delete menu item.");
+        }
+      }
+    }
+    async function fetchRatings() {
+  try {
+    const res = await fetch(`${API_BASE}/rating`);
+    const ratings = await res.json();
+    renderRatings(ratings);
+  } catch (err) {
+    console.error("Failed to fetch ratings:", err);
+    document.getElementById("ratings-container").innerText = "Failed to load ratings.";
+  }
+}
+
+function renderRatings(ratings) {
+  const container = document.getElementById("ratings-container");
+  if (ratings.length === 0) {
+    container.innerHTML = "<p>No ratings yet.</p>";
+    return;
+  }
+
+  container.innerHTML = "";
+  ratings.forEach(rating => {
+    const div = document.createElement("div");
+    div.className = "rating-item";
+    div.innerHTML = `
+      <strong>Rating:</strong> ${'★'.repeat(rating.rating)}<br/>
+      <strong>Feedback:</strong> ${rating.feedback || 'No feedback provided.'}<br/>
+       <button onclick="deleteRating('${rating._id}')">Delete Rating</button>
+      <hr/>
+
+    `;
+    container.appendChild(div);
+  });
+}
+async function deleteRating(id) {
+  if (confirm("Are you sure you want to delete this rating?")) {
+    try {
+      const res = await fetch(`${API_BASE}/rating/${id}`, { method: "DELETE" });
+      const data = await res.json();
+      alert(data.message);
+      fetchRatings(); // Refresh the ratings list
+    } catch (err) {
+      console.error("Failed to delete rating", err);
+      alert("Failed to delete rating.");
+    }
+  }
+}
+
+
+    window.onload = async () => {
+      await fetchMenuPrices();
+      fetchOrdersAndNotify();
+       await fetchRatings();
+      fetchMenu();
+      setInterval(fetchOrdersAndNotify, 5000);
+    };
+  </script>
+</body>
+</html>
